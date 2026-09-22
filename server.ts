@@ -33,42 +33,37 @@ function getGemini(): GoogleGenAI {
 
 const SYSTEM_INSTRUCTION = `You are ScamShield, an expert cybersecurity threat intelligence analyst specializing in recruitment scams, fake appointment letters, deposit traps, and phishing campaigns targeting job seekers and students.
 
-Your task is to analyze user-submitted job offer text, recruitment messages, recruitment URLs, or screenshot transcripts to compute an evidence-grounded Scam Threat Index (0–100%) and produce an explainable threat assessment.
+Your task is to extract, classify, and explain concrete evidence, risk indicators, positive signals, and entity claims from user-submitted job offer text, recruitment messages, URLs, or screenshots. The application scoring engine calculates the final numerical threat score and risk level deterministically from your extracted evidence.
 
-SCAM THREAT INDEX SCALE:
+SCAM THREAT INDEX SCALE THRESHOLDS:
 - 0–20%: LOW RISK (Consistent with standard legitimate professional communication, verified patterns, no red flags)
 - 21–40%: MODERATE RISK (Minor non-critical ambiguities, missing salary specifics, or informal channels, but no overt financial/credential exploitation)
 - 41–60%: ELEVATED RISK (Caution warranted: unusual requirements, pressure tactics, unverified domains, or unconventional interview processes)
 - 61–80%: HIGH RISK (Severe red flags detected: mandatory upfront payments, equipment fees, suspicious domain impersonation, credential harvesting paths, high urgency)
 - 81–100%: CRITICAL RISK (Active malicious campaign: explicit payment before onboarding, gift card/crypto deposit demands, credential theft, confirmed predatory structure)
 
-SCORING CONSISTENCY & EVIDENCE ALIGNMENT MANDATE:
-1. The final threat_score (0–100) and risk_level MUST strictly reflect the severity of the actual indicators identified:
-   - If ANY risk factor has HIGH severity (such as potential brand impersonation, lookalike domain, credential harvesting path, or unencrypted login), threat_score MUST be in the HIGH RISK range (65–80%). NEVER assign a score <= 40 or MODERATE/LOW RISK when a HIGH severity factor is present.
-   - If ANY risk factor has CRITICAL severity, threat_score MUST be 81–100 (CRITICAL RISK).
-   - If multiple HIGH severity indicators exist (e.g. lookalike domain + credential harvesting path), assign 75–85% (HIGH RISK).
-2. The verdict and summary MUST be derived from actual findings:
-   - NEVER output "Low threat profile" or "conforms to standard recruitment patterns" if a HIGH or CRITICAL risk factor is present.
-   - For lookalike domains (e.g., google-careers-verification.com), treat as: "Potential brand impersonation / lookalike domain" because it incorporates a major corporate brand name in a recruitment-related domain without evidence that it is an official corporate domain.
-   - Do NOT claim that the company has confirmed this domain is fraudulent. Maintain professional cybersecurity risk assessment language.
+EVIDENCE EXTRACTION & CLASSIFICATION MANDATE:
+1. Every risk_factor MUST reference specific verbatim evidence or observable facts from the input, followed by an explanation of why this creates risk in employment security. Assign severity (CRITICAL, HIGH, MEDIUM, LOW) objectively based on employment security standards:
+   - CRITICAL: Advance-fee payment demands, equipment purchase schemes, wire transfer/crypto requests, credential/OTP harvesting.
+   - HIGH: Potential brand impersonation, lookalike domains, unverified auth portals, extreme urgency with forfeiture threats.
+   - MEDIUM: Communication redirected to Telegram/WhatsApp, public webmail (@gmail.com) for enterprise recruitment, missing formal interview steps.
+   - LOW: Minor formatting anomalies, generic job descriptions without deceptive demands.
+2. For lookalike domains (e.g., google-careers-verification.com), treat as: "Potential brand impersonation / lookalike domain" (severity: HIGH) because it incorporates a major corporate brand name in a recruitment-related domain without evidence that it is an official corporate domain. Do NOT claim the company has confirmed it is fraudulent.
 3. If inspecting URLs: DO NOT claim domain age has been checked if an authoritative WHOIS provider is not accessed; explicitly state in verification_notes: "Domain age could not be independently verified." Do not fabricate WHOIS dates.
 4. If examining images: Do not claim an image is AI-generated or logo is fake without verifiable optical proof; state "Unable to verify from the provided image."
-5. Every risk_factor MUST reference specific verbatim evidence or observable facts from the input, followed by an explanation of why this creates risk in employment security.
-6. Balance findings by capturing legitimate "positive_signals" when actually present (e.g., standard professional interview timeline, valid corporate domain, lack of upfront fee requests, HTTPS protocol).
+5. Balance findings by capturing legitimate "positive_signals" when actually present (e.g., standard professional interview timeline, valid corporate domain, lack of upfront fee requests, HTTPS protocol).
 
 ADVANCED INVESTIGATION CAPABILITIES:
-7. SCAM PATTERN CLASSIFICATION (scam_patterns):
+6. SCAM PATTERN CLASSIFICATION (scam_patterns):
    Identify the primary scam archetype based strictly on evidence (e.g. Advance-Fee Recruitment Scam, Credential Phishing, Fake Work-From-Home Scam, WhatsApp/Telegram Recruitment Scam, Identity Harvesting, Impersonation). Provide specific reasons why it was detected.
-8. SCAM ATTACK CHAIN (attack_chain):
+7. SCAM ATTACK CHAIN (attack_chain):
    Dynamically reconstruct the step-by-step sequence of how this scam operates from bait to compromise (e.g. ["Fake Job Offer", "Unusually High Salary", "Urgency / Pressure", "Refundable Registration Fee", "Payment Request", "Sensitive Information Request", "OTP Extraction"]).
-9. ACTIONABLE FINDINGS (actionable_findings):
+8. ACTIONABLE FINDINGS (actionable_findings):
    Structure each key finding as: evidence -> why_it_matters -> what_to_do (e.g. "Never share the OTP", "Do not pay registration fees").
-10. CLAIM VS EVIDENCE (claim_evidence):
+9. CLAIM VS EVIDENCE (claim_evidence):
    When an organization or brand is claimed (e.g. Google), contrast Claimed Entity vs Observed Technical Indicator vs Objective Assessment. Use wording like "Potential brand impersonation / lookalike domain" or "Could not be independently verified".
-11. ACTION STATE (action_state):
-   Assign STOP (High/Critical risk), VERIFY FIRST (Elevated/Moderate risk), or LOW CONCERN (Low risk).
-12. INVESTIGATION CHECKS (investigation_checks):
-   Assess status (DETECTED, NOT VERIFIED, or VERIFIED) for Company identity, Recruiter contact, Payment request, Hiring process, and Official website.`;
+10. INVESTIGATION CHECKS (investigation_checks):
+    Assess status (DETECTED, NOT VERIFIED, or VERIFIED) for Company identity, Recruiter contact, Payment request, Hiring process, and Official website.`;
 
 const ANALYSIS_SCHEMA = {
   type: Type.OBJECT,
@@ -266,6 +261,133 @@ const ANALYSIS_SCHEMA = {
   ],
 };
 
+// ============================================================================
+// DETERMINISTIC APPLICATION SCORING ENGINE
+// The final 0-100 score and risk level are computed strictly by application code.
+// Gemini is used exclusively for extracting and classifying evidence.
+// ============================================================================
+
+export type RiskLevel =
+  | 'LOW RISK'
+  | 'MODERATE RISK'
+  | 'ELEVATED RISK'
+  | 'HIGH RISK'
+  | 'CRITICAL RISK'
+  | 'INSUFFICIENT EVIDENCE';
+
+/**
+ * Strict 1-to-1 mapping from numerical score (0-100) to RiskLevel.
+ * Enforced uniformly across backend calculations and frontend components:
+ * - 0–20%: LOW RISK
+ * - 21–40%: MODERATE RISK
+ * - 41–60%: ELEVATED RISK
+ * - 61–80%: HIGH RISK
+ * - 81–100%: CRITICAL RISK
+ */
+export function getRiskLevel(score: number): RiskLevel {
+  const s = Math.max(0, Math.min(100, Math.round(score)));
+  if (s >= 81) return 'CRITICAL RISK';
+  if (s >= 61) return 'HIGH RISK';
+  if (s >= 41) return 'ELEVATED RISK';
+  if (s >= 21) return 'MODERATE RISK';
+  return 'LOW RISK';
+}
+
+/**
+ * Computes the final 0–100 threat score deterministically from extracted findings.
+ * Mathematical invariants guaranteed:
+ * 1. The same input evidence always produces the exact same score and risk level.
+ * 2. Any CRITICAL factor guarantees score in [85, 98] -> CRITICAL RISK.
+ * 3. Any HIGH factor (no critical) guarantees score in [68, 80] -> HIGH RISK (or 81+ if 3+ highs).
+ * 4. 3+ MEDIUM factors (no high/crit) guarantees score in [44, 58] -> ELEVATED RISK.
+ * 5. 1-2 MEDIUM factors guarantees score in [28, 38] -> MODERATE RISK.
+ * 6. Only LOW or 0 factors guarantees score in [5, 20] -> LOW RISK.
+ */
+export function calculateDeterministicThreatScore(
+  riskFactors: Array<{ category?: string; severity?: string; evidence?: string; explanation?: string }>,
+  positiveSignals?: Array<{ indicator?: string; detail?: string }>,
+  _inputType?: string
+): { score: number; riskLevel: RiskLevel } {
+  let criticalCount = 0;
+  let highCount = 0;
+  let mediumCount = 0;
+  let lowCount = 0;
+
+  for (const rf of riskFactors) {
+    const sev = String(rf.severity || '').toUpperCase().trim();
+    if (sev === 'CRITICAL') criticalCount++;
+    else if (sev === 'HIGH') highCount++;
+    else if (sev === 'MEDIUM') mediumCount++;
+    else if (sev === 'LOW') lowCount++;
+  }
+
+  let calculatedScore = 10;
+
+  if (criticalCount > 0) {
+    // CRITICAL RISK tier: strictly 81–100
+    const base = 86;
+    const addCrit = (criticalCount - 1) * 4;
+    const addHigh = highCount * 2;
+    const addMed = Math.min(3, mediumCount * 1);
+    calculatedScore = Math.min(98, base + addCrit + addHigh + addMed);
+  } else if (highCount >= 3) {
+    // 3 or more HIGH severity indicators: Compounding severity triggers CRITICAL RISK tier (82-88)
+    const base = 82;
+    const addHigh = (highCount - 3) * 2;
+    const addMed = Math.min(3, mediumCount * 1);
+    calculatedScore = Math.min(88, base + addHigh + addMed);
+  } else if (highCount === 2) {
+    // 2 HIGH severity indicators: Upper HIGH RISK tier (76-80)
+    const base = 76;
+    const addMed = Math.min(4, Math.round(mediumCount * 1.5));
+    calculatedScore = Math.min(80, base + addMed);
+  } else if (highCount === 1) {
+    // 1 HIGH severity indicator: Strictly HIGH RISK tier (68-76)
+    const base = 68;
+    const addMed = Math.min(6, mediumCount * 2);
+    const addLow = Math.min(2, lowCount * 1);
+    calculatedScore = Math.min(76, base + addMed + addLow);
+  } else if (mediumCount >= 3) {
+    // 3+ MEDIUM severity indicators: Strictly ELEVATED RISK tier (44-58)
+    const base = 44;
+    const addMed = (mediumCount - 3) * 3;
+    calculatedScore = Math.min(58, base + addMed + Math.min(3, lowCount * 1));
+  } else if (mediumCount > 0) {
+    // 1-2 MEDIUM severity indicators: Strictly MODERATE RISK tier (28-38)
+    const base = 22 + (mediumCount * 7); // 1 med: 29, 2 med: 36
+    calculatedScore = Math.min(38, base + Math.min(2, lowCount * 1));
+  } else if (lowCount > 0) {
+    // Only LOW severity indicators: Strictly LOW RISK tier (12-20)
+    calculatedScore = Math.min(20, 10 + lowCount * 3);
+  } else {
+    // Zero risk factors detected: Strictly LOW RISK tier (5-10)
+    const posDiscount = Math.min(5, (positiveSignals?.length || 0) * 2);
+    calculatedScore = Math.max(5, 10 - posDiscount);
+  }
+
+  // Mitigating positive signals (only applied if not Critical)
+  if (criticalCount === 0 && positiveSignals && positiveSignals.length > 0) {
+    const mitigation = Math.min(3, positiveSignals.length);
+    // Respect strict tier lower-bounds so mitigation never causes a tier-level contradiction
+    if (highCount >= 3) {
+      calculatedScore = Math.max(81, calculatedScore - mitigation);
+    } else if (highCount > 0) {
+      calculatedScore = Math.max(65, calculatedScore - mitigation);
+    } else if (mediumCount >= 3) {
+      calculatedScore = Math.max(42, calculatedScore - mitigation);
+    } else if (mediumCount > 0) {
+      calculatedScore = Math.max(22, calculatedScore - mitigation);
+    } else {
+      calculatedScore = Math.max(5, calculatedScore - mitigation);
+    }
+  }
+
+  const finalScore = Math.max(0, Math.min(100, Math.round(calculatedScore)));
+  const riskLevel = getRiskLevel(finalScore);
+
+  return { score: finalScore, riskLevel };
+}
+
 // Fail-Safe Cybersecurity Threat Engine (runs if API experiences temporary high demand)
 function generateHeuristicReport(content: string, type: 'text' | 'url' | 'screenshot'): any {
   const lower = content.toLowerCase();
@@ -445,12 +567,9 @@ function generateHeuristicReport(content: string, type: 'text' | 'url' | 'screen
     }
   }
 
-  const finalScore = Math.max(5, Math.min(95, score));
-  let riskLevel = 'LOW RISK';
-  if (finalScore >= 81) riskLevel = 'CRITICAL RISK';
-  else if (finalScore >= 61) riskLevel = 'HIGH RISK';
-  else if (finalScore >= 41) riskLevel = 'ELEVATED RISK';
-  else if (finalScore >= 21) riskLevel = 'MODERATE RISK';
+  const { score: computedScore, riskLevel: computedRiskLevel } = calculateDeterministicThreatScore(riskFactors, positiveSignals, type);
+  const finalScore = computedScore;
+  const riskLevel = computedRiskLevel;
 
   const hasHighOrCritical = riskFactors.some(r => r.severity === 'HIGH' || r.severity === 'CRITICAL');
 
@@ -498,40 +617,13 @@ function generateHeuristicReport(content: string, type: 'text' | 'url' | 'screen
   };
 }
 
-// Deterministic Scoring & Verdict Consistency Engine (Dynamic Weighted Sum Model)
-const SEVERITY_BASE_WEIGHTS: Record<string, number> = {
-  CRITICAL: 40,
-  HIGH: 25,
-  MEDIUM: 12,
-  LOW: 5,
-};
-
-function getCategoryRiskMultiplier(category: string): number {
-  const cat = (category || '').toLowerCase();
-  if (cat.includes('financial') || cat.includes('payment') || cat.includes('deposit') || cat.includes('fee') || cat.includes('crypto') || cat.includes('equipment')) {
-    return 1.30;
-  }
-  if (cat.includes('brand') || cat.includes('impersonat') || cat.includes('lookalike') || cat.includes('identity')) {
-    return 1.25;
-  }
-  if (cat.includes('credential') || cat.includes('harvest') || cat.includes('phish') || cat.includes('password') || cat.includes('bank') || cat.includes('ssn') || cat.includes('otp')) {
-    return 1.25;
-  }
-  if (cat.includes('channel') || cat.includes('telegram') || cat.includes('whatsapp') || cat.includes('signal') || cat.includes('communication')) {
-    return 1.15;
-  }
-  if (cat.includes('urgency') || cat.includes('pressure') || cat.includes('deadline') || cat.includes('manipulation')) {
-    return 1.10;
-  }
-  return 1.0;
-}
-
 function enforceScoringConsistency(report: any, inputType: 'url' | 'text' | 'screenshot' | 'offer_text', rawInput: string): any {
   if (!report || typeof report !== 'object') return report;
 
-  const riskFactors: any[] = Array.isArray(report.risk_factors) ? [...report.risk_factors] : [];
+  const rawFactors: any[] = Array.isArray(report.risk_factors) ? [...report.risk_factors] : [];
+  const rawLower = (rawInput || '').toLowerCase();
 
-  // Specialized inspection for URL inputs to guarantee detection of lookalike domains and credential harvesting paths
+  // Specialized deterministic inspection for URL inputs to guarantee detection of lookalike domains and credential harvesting paths
   if (inputType === 'url') {
     try {
       const parsed = new URL(rawInput.startsWith('http://') || rawInput.startsWith('https://') ? rawInput : `https://${rawInput}`);
@@ -547,11 +639,11 @@ function enforceScoringConsistency(report: any, inputType: 'url' | 'text' | 'scr
 
       // Brand Impersonation / Lookalike Domain
       if (matchedBrand && hasRecruitTerm && !isOfficialDomain) {
-        const alreadyHasBrand = riskFactors.some(
+        const alreadyHasBrand = rawFactors.some(
           rf => rf.category?.toLowerCase().includes('brand') || rf.evidence?.toLowerCase().includes(matchedBrand)
         );
         if (!alreadyHasBrand) {
-          riskFactors.unshift({
+          rawFactors.unshift({
             category: 'Brand Impersonation / Lookalike Domain',
             severity: 'HIGH',
             evidence: hostname,
@@ -563,11 +655,11 @@ function enforceScoringConsistency(report: any, inputType: 'url' | 'text' | 'scr
       // Credential harvesting path check
       const hasCredentialPath = /(login|employee-confirmation|verification|signin|auth|password|account|credential|session)/i.test(pathname);
       if (hasCredentialPath && (matchedBrand || !isOfficialDomain)) {
-        const alreadyHasPath = riskFactors.some(
+        const alreadyHasPath = rawFactors.some(
           rf => rf.evidence?.toLowerCase().includes(pathname) || rf.category?.toLowerCase().includes('credential')
         );
         if (!alreadyHasPath) {
-          riskFactors.push({
+          rawFactors.push({
             category: 'Credential Harvesting Path',
             severity: 'HIGH',
             evidence: pathname,
@@ -580,69 +672,52 @@ function enforceScoringConsistency(report: any, inputType: 'url' | 'text' | 'scr
     }
   }
 
-  // 1. DYNAMIC WEIGHTED SUM CALCULATION OF IDENTIFIED RISK FACTORS
-  let criticalCount = 0;
-  let highCount = 0;
-  let mediumCount = 0;
-  let lowCount = 0;
-  let weightedRiskSum = 0;
+  // Specialized deterministic inspection for Text & Screenshot inputs
+  if (inputType === 'text' || inputType === 'offer_text' || inputType === 'screenshot') {
+    const hasAdvancePaymentFee = /\b(registration fee|security deposit|refundable deposit|laptop fee|equipment fee|wire transfer|crypto deposit|pay before|pay for equipment|software license fee)\b/i.test(rawLower);
+    if (hasAdvancePaymentFee) {
+      const alreadyHasPaymentCrit = rawFactors.some(
+        rf => String(rf.severity || '').toUpperCase() === 'CRITICAL' && /fee|deposit|payment|equipment|wire|crypto/i.test(rf.category + ' ' + rf.evidence)
+      );
+      if (!alreadyHasPaymentCrit) {
+        rawFactors.unshift({
+          category: 'Advance-Fee / Equipment Wire Trap',
+          severity: 'CRITICAL',
+          evidence: 'Mandatory upfront fee or equipment purchase demanded before onboarding',
+          explanation: 'Legitimate employers never demand upfront payment, equipment deposits, or wire transfers from prospective employees.',
+        });
+      }
+    }
+  }
 
-  for (const rf of riskFactors) {
+  // Deduplicate risk factors by normalized signature to guarantee stable counts
+  const seenSignatures = new Set<string>();
+  const riskFactors: any[] = [];
+  for (const rf of rawFactors) {
+    const cat = (rf.category || '').toLowerCase().trim();
     const sev = String(rf.severity || '').toUpperCase().trim();
-    const baseWeight = SEVERITY_BASE_WEIGHTS[sev] ?? 8;
-    const multiplier = getCategoryRiskMultiplier(rf.category || '');
-    weightedRiskSum += baseWeight * multiplier;
-
-    if (sev === 'CRITICAL') criticalCount++;
-    else if (sev === 'HIGH') highCount++;
-    else if (sev === 'MEDIUM') mediumCount++;
-    else lowCount++;
+    const evSub = (rf.evidence || '').toLowerCase().slice(0, 30).trim();
+    const sig = `${cat}:::${sev}:::${evSub}`;
+    if (!seenSignatures.has(sig)) {
+      seenSignatures.add(sig);
+      riskFactors.push({
+        category: rf.category || 'General Risk Factor',
+        severity: (['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].includes(sev) ? sev : 'MEDIUM') as any,
+        evidence: rf.evidence || 'Observable anomaly in submitted material',
+        explanation: rf.explanation || 'Identified pattern presents security risk.',
+      });
+    }
   }
 
-  // 2. DYNAMIC THREAT SCORE RECALCULATION
-  // Combine weighted sum with severity boundary guarantees to eliminate contradictions
-  let recalculatedScore = Math.round(weightedRiskSum);
+  const positiveSignals = Array.isArray(report.positive_signals) ? report.positive_signals : [];
 
-  if (criticalCount > 0) {
-    // Critical indicators demand CRITICAL RISK range (85-100)
-    const criticalFloor = 85 + (criticalCount - 1) * 5 + highCount * 3;
-    recalculatedScore = Math.max(criticalFloor, Math.max(recalculatedScore, Number(report.threat_score) || 0));
-  } else if (highCount >= 2) {
-    // Multiple high-severity indicators demand elevated High/Critical risk range (76-95)
-    const multiHighFloor = 76 + (highCount - 2) * 5 + mediumCount * 2;
-    recalculatedScore = Math.max(multiHighFloor, Math.max(recalculatedScore, Number(report.threat_score) || 0));
-  } else if (highCount === 1) {
-    // Single high-severity indicator STRICTLY guarantees HIGH RISK range (68-82)
-    // PREVENTING it from ever falling into 40/100 or MODERATE/LOW
-    const singleHighFloor = 68 + mediumCount * 3;
-    recalculatedScore = Math.max(singleHighFloor, Math.min(84, Math.max(recalculatedScore, Number(report.threat_score) || 0)));
-  } else if (mediumCount > 0) {
-    // Only medium indicators: 25-58
-    recalculatedScore = Math.max(25, Math.min(58, recalculatedScore));
-  } else if (lowCount > 0) {
-    // Only low indicators: 10-25
-    recalculatedScore = Math.max(10, Math.min(25, recalculatedScore));
-  } else {
-    // Zero risk factors identified: 5-15
-    recalculatedScore = Math.min(15, Math.max(5, Number(report.threat_score) || 8));
-  }
+  // 1. DETERMINISTIC APPLICATION-LEVEL SCORING
+  // Gemini's arbitrary score is completely disregarded; application code calculates score and risk level.
+  const { score: finalScore, riskLevel } = calculateDeterministicThreatScore(riskFactors, positiveSignals, inputType);
 
-  const finalScore = Math.max(0, Math.min(100, Math.round(recalculatedScore)));
-
-  // 3. DYNAMIC RISK LEVEL RECALCULATION
-  // Invariant: Risk level strictly adheres to the recalculated weighted score and highest severity detected
-  let riskLevel = 'LOW RISK';
-  if (criticalCount > 0 || finalScore >= 81) {
-    riskLevel = 'CRITICAL RISK';
-  } else if (highCount > 0 || finalScore >= 61) {
-    riskLevel = 'HIGH RISK';
-  } else if (finalScore >= 41) {
-    riskLevel = 'ELEVATED RISK';
-  } else if (finalScore >= 21 || mediumCount > 0) {
-    riskLevel = 'MODERATE RISK';
-  } else {
-    riskLevel = 'LOW RISK';
-  }
+  const criticalCount = riskFactors.filter(r => String(r.severity || '').toUpperCase() === 'CRITICAL').length;
+  const highCount = riskFactors.filter(r => String(r.severity || '').toUpperCase() === 'HIGH').length;
+  const mediumCount = riskFactors.filter(r => String(r.severity || '').toUpperCase() === 'MEDIUM').length;
 
   // 4. DYNAMIC VERDICT & SUMMARY RECALCULATION
   // Prevent any contradiction where high/critical indicators coexist with 'Low threat profile'
@@ -735,15 +810,23 @@ function enforceScoringConsistency(report: any, inputType: 'url' | 'text' | 'scr
       const hasH = matchingFactors.some(f => String(f.severity || '').toUpperCase() === 'HIGH');
       const hasM = matchingFactors.some(f => String(f.severity || '').toUpperCase() === 'MEDIUM');
 
-      let targetCatScore = cs.score || 0;
-      if (hasCrit) targetCatScore = Math.max(targetCatScore, 85);
-      else if (hasH) targetCatScore = Math.max(targetCatScore, 70);
-      else if (hasM) targetCatScore = Math.max(targetCatScore, 40);
+      let targetCatScore = 8;
+      if (hasCrit) {
+        targetCatScore = 88 + Math.min(10, (matchingFactors.length - 1) * 3);
+      } else if (hasH) {
+        targetCatScore = 72 + Math.min(12, (matchingFactors.length - 1) * 4);
+      } else if (hasM) {
+        targetCatScore = 40 + Math.min(15, (matchingFactors.length - 1) * 5);
+      } else if (matchingFactors.length > 0) {
+        targetCatScore = 20;
+      } else {
+        targetCatScore = cs.category?.includes('Urgency') ? 5 : 8;
+      }
 
       return {
         ...cs,
         score: Math.min(100, Math.max(0, targetCatScore)),
-        findingCount: Math.max(cs.findingCount || 0, matchingFactors.length),
+        findingCount: matchingFactors.length,
       };
     });
   }
@@ -752,10 +835,10 @@ function enforceScoringConsistency(report: any, inputType: 'url' | 'text' | 'scr
   let action_state: 'STOP' | 'VERIFY FIRST' | 'LOW CONCERN' = 'LOW CONCERN';
   let action_headline = 'No major warning indicators detected. Practice standard professional due diligence.';
 
-  if (riskLevel === 'CRITICAL RISK' || riskLevel === 'HIGH RISK' || finalScore >= 61 || criticalCount > 0 || highCount > 0) {
+  if (riskLevel === 'CRITICAL RISK' || riskLevel === 'HIGH RISK' || finalScore >= 61) {
     action_state = 'STOP';
     action_headline = 'Do not send money, OTPs, or personal identity documents.';
-  } else if (riskLevel === 'ELEVATED RISK' || riskLevel === 'MODERATE RISK' || finalScore >= 35 || mediumCount > 0) {
+  } else if (riskLevel === 'ELEVATED RISK' || riskLevel === 'MODERATE RISK' || finalScore >= 21) {
     action_state = 'VERIFY FIRST';
     action_headline = 'Independently confirm the employer and recruiter before proceeding.';
   }
@@ -1061,11 +1144,53 @@ async function generateGeminiContentWithFallback(contents: any, config: any): Pr
   throw lastErr || new Error('All AI models unavailable');
 }
 
+// ============================================================================
+// DETERMINISTIC RESULT CACHE
+// Guarantees identical input queries return identical analytical findings,
+// threat scores, and risk classifications without drift.
+// ============================================================================
+const analysisCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24-hour cache
+
+function normalizeForCacheKey(str: string): string {
+  return (str || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function getCacheKey(type: string, primaryInput: string, secondaryContext?: string): string {
+  const normPrimary = normalizeForCacheKey(primaryInput);
+  const normSec = secondaryContext ? normalizeForCacheKey(secondaryContext) : '';
+  return `${type}:::${normPrimary}:::${normSec}`;
+}
+
+function getCachedAnalysis(key: string): any | null {
+  const item = analysisCache.get(key);
+  if (!item) return null;
+  if (Date.now() - item.timestamp > CACHE_TTL_MS) {
+    analysisCache.delete(key);
+    return null;
+  }
+  return item.data;
+}
+
+function setCachedAnalysis(key: string, data: any): void {
+  if (analysisCache.size > 500) {
+    const oldestKey = analysisCache.keys().next().value;
+    if (oldestKey) analysisCache.delete(oldestKey);
+  }
+  analysisCache.set(key, { data, timestamp: Date.now() });
+}
+
 // Analyze Offer / Recruitment Message Text
 app.post('/api/analyze/text', async (req: Request, res: Response) => {
   const { content } = req.body;
   if (!content || typeof content !== 'string' || content.trim().length === 0) {
     return res.status(400).json({ error: 'Please provide job offer or recruitment message text to analyze.' });
+  }
+
+  const cacheKey = getCacheKey('text', content);
+  const cached = getCachedAnalysis(cacheKey);
+  if (cached) {
+    return res.json({ ...cached, cached: true });
   }
 
   // Attempt live Gemini inspection with retry
@@ -1092,13 +1217,14 @@ Format your evaluation according to the JSON response schema. Ensure the threat_
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
       responseSchema: ANALYSIS_SCHEMA as any,
-      temperature: 0.2,
+      temperature: 0.0,
     });
 
     const parsed = JSON.parse(response.text || '{}');
     const normalized = enforceScoringConsistency(parsed, 'offer_text', content);
     normalized.input_type = 'offer_text';
     normalized.analyzed_at = new Date().toISOString();
+    setCachedAnalysis(cacheKey, normalized);
     return res.json(normalized);
   } catch (err: any) {
     console.warn('Gemini live call error, applying cybersecurity heuristic fallback:', err?.message);
@@ -1109,6 +1235,7 @@ Format your evaluation according to the JSON response schema. Ensure the threat_
       finding: 'Assessed with evidence-based cybersecurity threat scoring rules.',
     });
     const normalizedFallback = enforceScoringConsistency(fallback, 'text', content);
+    setCachedAnalysis(cacheKey, normalizedFallback);
     return res.json(normalizedFallback);
   }
 });
@@ -1125,6 +1252,12 @@ app.post('/api/analyze/url', async (req: Request, res: Response) => {
     parsedUrl = new URL(url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`);
   } catch {
     return res.status(400).json({ error: 'The provided URL is malformed or invalid.' });
+  }
+
+  const cacheKey = getCacheKey('url', parsedUrl.href, messageContext);
+  const cached = getCachedAnalysis(cacheKey);
+  if (cached) {
+    return res.json({ ...cached, cached: true });
   }
 
   try {
@@ -1177,7 +1310,7 @@ MANDATORY SCORING & CONSISTENCY RULES:
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
       responseSchema: ANALYSIS_SCHEMA as any,
-      temperature: 0.2,
+      temperature: 0.0,
     });
 
     const parsed = JSON.parse(response.text || '{}');
@@ -1188,6 +1321,7 @@ MANDATORY SCORING & CONSISTENCY RULES:
       normalized.correlated_message = messageContext;
     }
     normalized.analyzed_at = new Date().toISOString();
+    setCachedAnalysis(cacheKey, normalized);
     return res.json(normalized);
   } catch (err: any) {
     console.warn('Gemini URL analysis error, using fallback:', err?.message);
@@ -1197,6 +1331,7 @@ MANDATORY SCORING & CONSISTENCY RULES:
     if (messageContext) {
       normalizedFallback.correlated_message = messageContext;
     }
+    setCachedAnalysis(cacheKey, normalizedFallback);
     return res.json(normalizedFallback);
   }
 });
@@ -1209,6 +1344,12 @@ app.post('/api/analyze/image', async (req: Request, res: Response) => {
   }
 
   const cleanBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+  const imageHash = `${cleanBase64.length}_${cleanBase64.slice(0, 100)}_${cleanBase64.slice(-100)}`;
+  const cacheKey = getCacheKey('image', imageHash, additionalNotes);
+  const cached = getCachedAnalysis(cacheKey);
+  if (cached) {
+    return res.json({ ...cached, cached: true });
+  }
 
   try {
     const imagePart = {
@@ -1234,13 +1375,14 @@ Your task:
       systemInstruction: SYSTEM_INSTRUCTION,
       responseMimeType: 'application/json',
       responseSchema: ANALYSIS_SCHEMA as any,
-      temperature: 0.2,
+      temperature: 0.0,
     });
 
     const parsed = JSON.parse(response.text || '{}');
     const normalized = enforceScoringConsistency(parsed, 'screenshot', additionalNotes);
     normalized.input_type = 'screenshot';
     normalized.analyzed_at = new Date().toISOString();
+    setCachedAnalysis(cacheKey, normalized);
     return res.json(normalized);
   } catch (err: any) {
     console.warn('Gemini image analysis error, using fallback:', err?.message);
@@ -1251,6 +1393,7 @@ Your task:
       finding: 'Unable to verify typography micro-artifacts without high-resolution source document.',
     });
     const normalizedFallback = enforceScoringConsistency(fallback, 'screenshot', additionalNotes);
+    setCachedAnalysis(cacheKey, normalizedFallback);
     return res.json(normalizedFallback);
   }
 });

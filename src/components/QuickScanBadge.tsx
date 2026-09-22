@@ -55,21 +55,21 @@ export const QuickScanBadge: React.FC<QuickScanBadgeProps> = ({
     <div id="quick-scan-action-section" className="space-y-3.5">
       {/* 1. Prominent Action Recommendation Banner */}
       <div
-        className={`p-4 sm:p-5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-lg ${actionConfig.banner}`}
+        className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xl backdrop-blur-md ${actionConfig.banner}`}
       >
         <div className="flex items-center gap-3.5">
           <div
-            className={`px-3 py-1.5 rounded-lg text-xs font-black tracking-wider flex items-center gap-1.5 shadow-md flex-shrink-0 ${actionConfig.badge}`}
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-black tracking-wider flex items-center gap-1.5 shadow-md flex-shrink-0 ${actionConfig.badge}`}
           >
             <ActionIcon className="w-4 h-4" />
             <span>{actionConfig.title}</span>
           </div>
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-white leading-tight">
+            <h3 className="text-sm sm:text-base font-bold text-white leading-tight font-sans tracking-tight">
               {actionHeadline || actionConfig.defaultHeadline}
             </h3>
-            <p className="text-xs text-slate-300 mt-0.5">
-              Immediate defensive posture advised based on extracted threat evidence.
+            <p className="text-xs text-zinc-400 mt-0.5 font-mono">
+              DEFENSIVE POSTURE DIRECTIVE // EXTRACTED THREAT PROFILE
             </p>
           </div>
         </div>
@@ -77,14 +77,14 @@ export const QuickScanBadge: React.FC<QuickScanBadgeProps> = ({
 
       {/* 2. Scam Patterns Chips Section */}
       {scamPatterns && scamPatterns.length > 0 && (
-        <div className="p-3.5 sm:p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+        <div className="p-4 sm:p-4.5 rounded-2xl bg-black/90 border border-zinc-800 space-y-2.5 shadow-xl">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <Target className="w-3.5 h-3.5 text-rose-400" />
-              Identified Scam Patterns
+            <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+              <Target className="w-3.5 h-3.5 text-rose-500" />
+              IDENTIFIED SCAM SIGNATURES
             </span>
-            <span className="text-[10px] font-mono text-slate-500 uppercase">
-              {scamPatterns.length} {scamPatterns.length === 1 ? 'Pattern' : 'Patterns'}
+            <span className="text-[10px] font-mono text-zinc-500 uppercase bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
+              {scamPatterns.length} {scamPatterns.length === 1 ? 'SIGNATURE' : 'SIGNATURES'}
             </span>
           </div>
 
@@ -92,13 +92,13 @@ export const QuickScanBadge: React.FC<QuickScanBadgeProps> = ({
             {scamPatterns.map((p, idx) => (
               <div
                 key={idx}
-                className="group relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:border-slate-700 text-xs font-medium transition-colors"
+                className="group relative inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-zinc-950 border border-zinc-800/90 hover:border-zinc-700 text-xs font-mono transition-all shadow-sm"
               >
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-400 flex-shrink-0" />
-                <span className="font-semibold text-slate-200">{p.pattern}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0 animate-pulse" />
+                <span className="font-semibold text-zinc-200">{p.pattern}</span>
                 {p.reasons && p.reasons.length > 0 && (
-                  <span className="text-[11px] text-slate-400 hidden sm:inline">
-                    &bull; {p.reasons.slice(0, 2).join(', ')}
+                  <span className="text-[11px] text-zinc-400 hidden sm:inline">
+                    // {p.reasons.slice(0, 2).join(', ')}
                   </span>
                 )}
               </div>

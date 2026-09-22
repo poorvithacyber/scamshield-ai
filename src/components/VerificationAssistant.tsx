@@ -42,7 +42,7 @@ export const VerificationAssistant: React.FC<VerificationAssistantProps> = ({ ch
       case 'NOT VERIFIED':
       default:
         return {
-          badge: 'bg-slate-800 text-slate-300 border-slate-700',
+          badge: 'bg-zinc-900 text-zinc-400 border-zinc-700',
           icon: HelpCircle,
           label: 'NOT VERIFIED',
         };
@@ -52,34 +52,34 @@ export const VerificationAssistant: React.FC<VerificationAssistantProps> = ({ ch
   return (
     <div
       id="verification-assistant-card"
-      className="rounded-xl bg-slate-900/90 border border-slate-800 shadow-xl overflow-hidden"
+      className="rounded-2xl bg-black/90 border border-zinc-800 shadow-2xl overflow-hidden backdrop-blur-md"
     >
       {/* Expandable Header */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full p-4 sm:p-5 flex items-center justify-between gap-3 bg-slate-950/40 hover:bg-slate-800/40 transition-colors text-left cursor-pointer border-b border-slate-800/80"
+        className="w-full p-4 sm:p-5 flex items-center justify-between gap-3 bg-zinc-950/70 hover:bg-zinc-900/60 transition-colors text-left cursor-pointer border-b border-zinc-800/80"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 flex-shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-zinc-900 border border-zinc-700/80 flex items-center justify-center text-zinc-300 flex-shrink-0">
             <Search className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-100">
-              Verification Details & Checkpoints
+            <h3 className="text-sm font-mono font-bold uppercase tracking-wider text-zinc-100">
+              Verification Checkpoints & Due Diligence
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-zinc-400">
               Deeper corroboration checks and employer due diligence checklist
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono uppercase px-2.5 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30 font-semibold hidden sm:inline-block">
-            {checks ? checks.length : 0} Checks
+          <span className="text-xs font-mono uppercase px-2.5 py-0.5 rounded-full bg-zinc-900 text-zinc-300 border border-zinc-700 font-semibold hidden sm:inline-block">
+            {checks ? checks.length : 0} CHECKS
           </span>
           <ChevronDown
-            className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${
+            className={`w-4 h-4 text-zinc-400 transition-transform duration-200 ${
               isOpen ? 'rotate-180' : ''
             }`}
           />
@@ -97,20 +97,20 @@ export const VerificationAssistant: React.FC<VerificationAssistantProps> = ({ ch
                 return (
                   <div
                     key={idx}
-                    className="p-3.5 rounded-xl bg-slate-950 border border-slate-800/90 flex flex-col justify-between space-y-2"
+                    className="p-3.5 rounded-xl bg-zinc-950 border border-zinc-800/90 flex flex-col justify-between space-y-2 hover:border-zinc-700 transition-colors"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <span className="font-semibold text-slate-200 text-xs">
+                      <span className="font-semibold text-zinc-200 text-xs">
                         {item.check}
                       </span>
                       <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${badge} flex-shrink-0`}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${badge} flex-shrink-0`}
                       >
                         <Icon className="w-3 h-3" />
                         {label}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-snug">
+                    <p className="text-[11px] text-zinc-400 leading-snug font-sans">
                       {item.detail}
                     </p>
                   </div>
@@ -120,24 +120,24 @@ export const VerificationAssistant: React.FC<VerificationAssistantProps> = ({ ch
           )}
 
           {/* 2. Interactive Pre-Flight Due Diligence Checklist */}
-          <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-300 block">
-              Pre-Action Employer Verification Checklist
+          <div className="p-4 sm:p-5 rounded-2xl bg-zinc-950 border border-zinc-800/80 space-y-3">
+            <span className="text-xs font-mono font-bold uppercase tracking-wider text-zinc-300 block">
+              PRE-ACTION DEFENSIVE DUE DILIGENCE CHECKLIST
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
               <button
                 type="button"
                 onClick={() => toggleCheck('website')}
-                className={`p-2.5 rounded-lg border flex items-center gap-2.5 text-left transition-colors cursor-pointer ${
+                className={`p-3 rounded-xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
                   checklist.website
-                    ? 'bg-sky-500/10 border-sky-500/30 text-sky-200'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                    : 'bg-black border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
                 }`}
               >
                 {checklist.website ? (
-                  <CheckSquare className="w-4 h-4 text-sky-400 flex-shrink-0" />
+                  <CheckSquare className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 ) : (
-                  <Square className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                  <Square className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                 )}
                 <span>Verify company through its official top-level domain</span>
               </button>
@@ -145,16 +145,16 @@ export const VerificationAssistant: React.FC<VerificationAssistantProps> = ({ ch
               <button
                 type="button"
                 onClick={() => toggleCheck('careers')}
-                className={`p-2.5 rounded-lg border flex items-center gap-2.5 text-left transition-colors cursor-pointer ${
+                className={`p-3 rounded-xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
                   checklist.careers
-                    ? 'bg-sky-500/10 border-sky-500/30 text-sky-200'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                    : 'bg-black border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
                 }`}
               >
                 {checklist.careers ? (
-                  <CheckSquare className="w-4 h-4 text-sky-400 flex-shrink-0" />
+                  <CheckSquare className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 ) : (
-                  <Square className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                  <Square className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                 )}
                 <span>Confirm requisition exists on official corporate careers portal</span>
               </button>
@@ -162,16 +162,16 @@ export const VerificationAssistant: React.FC<VerificationAssistantProps> = ({ ch
               <button
                 type="button"
                 onClick={() => toggleCheck('identity')}
-                className={`p-2.5 rounded-lg border flex items-center gap-2.5 text-left transition-colors cursor-pointer ${
+                className={`p-3 rounded-xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
                   checklist.identity
-                    ? 'bg-sky-500/10 border-sky-500/30 text-sky-200'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                    : 'bg-black border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
                 }`}
               >
                 {checklist.identity ? (
-                  <CheckSquare className="w-4 h-4 text-sky-400 flex-shrink-0" />
+                  <CheckSquare className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 ) : (
-                  <Square className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                  <Square className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                 )}
                 <span>Verify recruiter identity via official corporate communications</span>
               </button>
@@ -179,16 +179,16 @@ export const VerificationAssistant: React.FC<VerificationAssistantProps> = ({ ch
               <button
                 type="button"
                 onClick={() => toggleCheck('noPay')}
-                className={`p-2.5 rounded-lg border flex items-center gap-2.5 text-left transition-colors cursor-pointer ${
+                className={`p-3 rounded-xl border flex items-center gap-2.5 text-left transition-all cursor-pointer ${
                   checklist.noPay
-                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                    : 'bg-black border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700'
                 }`}
               >
                 {checklist.noPay ? (
                   <CheckSquare className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                 ) : (
-                  <Square className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                  <Square className="w-4 h-4 text-zinc-600 flex-shrink-0" />
                 )}
                 <span className="font-semibold text-emerald-300">
                   Defensive rule: Never pay or deposit money to obtain employment
