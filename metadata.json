@@ -1,0 +1,6 @@
+{
+  "name": "ScamShield",
+  "description": "AI-Powered Security Investigation Assistant analyzing recruitment messages, fake job offers, and lookalike URLs with attack chain reconstruction.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
